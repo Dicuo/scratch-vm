@@ -85,6 +85,11 @@ class VirtualMachine extends EventEmitter {
          */
         this._dragTarget = null;
 
+        /**
+         * Ordering of toolbox categories by their respective IDs.
+         */
+        this._categoryOrdering = [];
+
         // Runtime emits are passed along as VM emits.
         this.runtime.on(Runtime.SCRIPT_GLOW_ON, glowData => {
             this.emit(Runtime.SCRIPT_GLOW_ON, glowData);

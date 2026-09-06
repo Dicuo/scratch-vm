@@ -720,6 +720,8 @@ const serializeConfig = function (runtime) {
     if (runtime.compilerOptions.strictEquality) config.strictEquality = true;
     if (runtime.runtimeOptions.miscLimits) config.miscLimits = true;
     if (runtime.runtimeOptions.fencing) config.fencing = true;
+    if (runtime.runtimeOptions.disableDirectionClamping) config.disableDirectionClamping = true;
+    if (runtime.runtimeOptions.disableOffscreenRendering) config.disableOffscreenRendering = true;
 
     if (runtime.frameLoop.framerate !== 30) config.frameRate = runtime.frameLoop.framerate;
     if (runtime.runtimeOptions.maxClones !== runtime.constructor.MAX_CLONES) config.maxClones = (runtime.runtimeOptions.maxClones === Infinity ? -1 : runtime.runtimeOptions.maxClones);
@@ -729,6 +731,10 @@ const serializeConfig = function (runtime) {
             width: runtime.stageWidth,
             height: runtime.stageHeight
         }
+    }
+
+    if (runtime.vm && runtime.vm._categoryOrdering.length) {
+        config.categoryOrdering = runtime.vm._categoryOrdering;
     }
 
     return config;
@@ -1622,9 +1628,15 @@ const deserializeConfig = function (config, runtime) {
         maxClones: (config.maxClones === -1 ? Infinity : config.maxClones) ?? runtime.constructor.MAX_CLONES,
         miscLimits: !!config.miscLimits,
         fencing: !!config.fencing
+        disableDirectionClamping: !!config.disableOffscreenRendering,
+        disableOffscreenRendering: !!config.disableOffscreenRendering,
     });
     
     runtime.setStageSize(config.stageSize?.width, config.stageSize?.height);
+
+    if (runtime.vm && config.categoryOrdering) {
+        runtime.vm._categoryOrdering = config.categoryOrdering;
+    }
 }
 
 /**
