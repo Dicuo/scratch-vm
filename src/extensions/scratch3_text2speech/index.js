@@ -869,7 +869,7 @@ class Scratch3Text2SpeechBlocks {
         path += `&text=${encodeURIComponent(words.substring(0, textLimit))}`;
 
         if (typeof state.speed === 'number') {
-            playbackRate = clampToAudioLimits(playbackRate * state.speed);
+            playbackRate = clampToValidPlaybackRate(playbackRate * state.speed);
         }
 
         // Perform HTTP request to get audio file
