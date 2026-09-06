@@ -3672,6 +3672,15 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Updates a checkbox in the flyout for a monitored block.
+     * @param {VM.Blocks.Block.id} blockId ID of the monitored block.
+     * @param {boolean} checked True checkbox should be checked.
+     */
+    updateFlyoutCheckbox (blockId, checked) {
+        console.warn('Warning: \'runtime.updateFlyoutCheckbox\' has not been connected to Blockly!');
+    }
+
+    /**
      * Get a target by its id.
      * @param {string} targetId Id of target to find.
      * @return {?Target} The target, if found.
