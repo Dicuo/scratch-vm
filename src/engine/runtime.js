@@ -4025,7 +4025,7 @@ class Runtime extends EventEmitter {
      * @param {string} screen the screen to get
      * @returns {object} the screen state object
      */
-    getCamera(screen) {
+    getCamera (screen) {
         if (typeof this.cameraStates[screen] !== 'object') {
             this.cameraStates[screen] = {
                 pos: [0, 0],
@@ -4042,7 +4042,7 @@ class Runtime extends EventEmitter {
      * @param {object} state the state to apply to the screen
      * @param {boolean} silent if we should emit an event because of this change
      */
-    updateCamera(screen, state, silent) {
+    updateCamera (screen, state, silent) {
         if (state.dir) state.dir = MathUtil.wrapClamp(state.dir, -179, 180);
         if (typeof this.cameraStates[screen] !== 'object') {
             this.cameraStates[screen] = {
@@ -4055,7 +4055,7 @@ class Runtime extends EventEmitter {
             Object.assign(this.cameraStates[screen], state);
         if (!silent ?? state.silent) this.emitCameraChanged(screen);
     }
-    emitCameraChanged(screen) {
+    emitCameraChanged (screen) {
         let state = this.cameraStates[screen];
         switch (screen) {
             case "default": screen = this.renderer.camera.defaultName; break;
@@ -4068,7 +4068,7 @@ class Runtime extends EventEmitter {
         this.requestRedraw();
     }
 
-    equals(a, b) {
+    equals (a, b) {
         const isCustomType = v => {
             let prototype = Object.getPrototypeOf(v)
             return prototype !== Object.prototype && prototype !== null && v.customId
@@ -4116,6 +4116,10 @@ class Runtime extends EventEmitter {
             if (Number.isNaN(n2) || (n2 === 0 && isNotActuallyZero(b))) return ('' + a).toLowerCase() === ('' + b).toLowerCase();
             return n1 === n2;
         }
+    }
+
+    updateProjectBlockCounter () {
+        // TODO
     }
 }
 
