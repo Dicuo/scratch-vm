@@ -578,6 +578,12 @@ class Runtime extends EventEmitter {
         this.extensionStorage = {};
 
         /**
+         * Total number of blocks in project.
+         * @type {Number}
+         */
+        this._projectBlockCount = 0;
+
+        /**
          * Total number of scratch-storage load() requests since the runtime was created or cleared.
          */
         this.totalAssetRequests = 0;
@@ -4119,7 +4125,15 @@ class Runtime extends EventEmitter {
     }
 
     updateProjectBlockCounter () {
-        // TODO
+        let total = 0;
+        for (let i = 0; i < this.targets.length; i++) {
+            const target = this.targets[i];
+            if (target.isOriginal) {
+                total += Object.values(target.blocks._blocks).reduce((a, b) => a + (b.shadow ? 0 : 1), 0);
+            }
+        }
+
+        this._projectBlockCount = total;
     }
 }
 
