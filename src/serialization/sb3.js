@@ -1627,7 +1627,7 @@ const deserializeConfig = function (config, runtime) {
     runtime.setRuntimeOptions({
         maxClones: (config.maxClones === -1 ? Infinity : config.maxClones) ?? runtime.constructor.MAX_CLONES,
         miscLimits: !!config.miscLimits,
-        fencing: !!config.fencing
+        fencing: !!config.fencing,
         disableDirectionClamping: !!config.disableOffscreenRendering,
         disableOffscreenRendering: !!config.disableOffscreenRendering,
     });
