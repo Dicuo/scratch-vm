@@ -381,16 +381,24 @@ class Scratch3PenBlocks {
     _getBitmapCanvas () {
         const penSkinId = this._getPenLayerID();
         const penSkin = this.runtime.renderer._allSkins[penSkinId];
+
         const width = Math.max(1, penSkin._size[0]);
         const height = Math.max(1, penSkin._size[1]);
 
         this.bitmapCanvas.width = width;
         this.bitmapCanvas.height = height;
 
-        this.bitmapContext.clearRect(0, 0, width, height);
-        this.bitmapContext.translate(width / 2, height / 2);
-        this.bitmapContext.scale(penSkin.renderQuality, penSkin.renderQuality);
-        return this.bitmapContext;
+        const ctx = this.bitmapContext;
+
+        ctx.save();
+
+        ctx.translate(width / 2, height / 2);
+        ctx.scale(
+            penSkin.renderQuality,
+            penSkin.renderQuality
+        );
+
+        return ctx;
     }
 
     /**
@@ -401,10 +409,17 @@ class Scratch3PenBlocks {
         const penSkinId = this._getPenLayerID();
         const width = this.bitmapCanvas.width;
         const height = this.bitmapCanvas.height;
+
         ctx.restore();
 
         const printSkin = this.runtime.renderer._allSkins[this.bitmapSkinID];
-        const imageData = ctx.getImageData(0, 0, width, height);
+        const imageData = ctx.getImageData(
+            0,
+            0,
+            width,
+            height
+        );
+
         printSkin._setTexture(imageData);
 
         this.runtime.renderer.penStamp(penSkinId, this.bitmapDrawableID);
@@ -1503,33 +1518,33 @@ class Scratch3PenBlocks {
 
     /** PM Extra Blocks */
     setPrintFont (args) {
-        this.printTextAttribute.font = Cast.toString(args.FONT);
+        this.printTextAttributes.font = Cast.toString(args.FONT);
     }
 
     setPrintFontSize (args) {
-        this.printTextAttribute.size = Cast.toNumber(args.SIZE);
+        this.printTextAttributes.size = Cast.toNumber(args.SIZE);
     }
 
     setPrintFontColor (args, util) {
         const rgb = Cast.toRgbColorObject(args.COLOR);
-        this.printTextAttribute.color = this._toCanvasColor(rgb, util.target);
+        this.printTextAttributes.color = this._toCanvasColor(rgb, util.target);
     }
 
     setPrintFontStrokeColor (args, util) {
         const rgb = Cast.toRgbColorObject(args.COLOR);
-        this.printTextAttribute.strokeColor = this._toCanvasColor(rgb, util.target);
+        this.printTextAttributes.strokeColor = this._toCanvasColor(rgb, util.target);
     }
 
     setPrintFontStrokeWidth (args) {
-        this.printTextAttribute.strokeWidth = Cast.toNumber(args.WIDTH);
+        this.printTextAttributes.strokeWidth = Cast.toNumber(args.WIDTH);
     }
 
     setPrintFontWeight (args) {
-        this.printTextAttribute.weight = Cast.toNumber(args.WEIGHT);
+        this.printTextAttributes.weight = Cast.toNumber(args.WEIGHT);
     }
 
     setPrintFontItalics (args) {
-        this.printTextAttribute.italic = args.OPTION === ItalicsParam.ON;
+        this.printTextAttributes.italic = args.OPTION === ItalicsParam.ON;
     }
 
     printText (args) {
@@ -1538,17 +1553,17 @@ class Scratch3PenBlocks {
         const ctx = this._getBitmapCanvas();
 
         let resultFont = '';
-        resultFont += `${this.printTextAttribute.italic ? 'italic ' : ''}`;
-        resultFont += `${this.printTextAttribute.weight} `;
-        resultFont += `${this.printTextAttribute.size}px `;
-        resultFont += this.printTextAttribute.font;
+        resultFont += `${this.printTextAttributes.italic ? 'italic ' : ''}`;
+        resultFont += `${this.printTextAttributes.weight} `;
+        resultFont += `${this.printTextAttributes.size}px `;
+        resultFont += this.printTextAttributes.font;
         ctx.font = resultFont;
 
-        ctx.strokeStyle = this.printTextAttribute.strokeWidth > 0 ? this.printTextAttribute.strokeColor : this.printTextAttribute.color;
-        ctx.lineWidth = this.printTextAttribute.strokeWidth;
-        ctx.fillStyle = this.printTextAttribute.color;
+        ctx.strokeStyle = this.printTextAttributes.strokeWidth > 0 ? this.printTextAttributes.strokeColor : this.printTextAttributes.color;
+        ctx.lineWidth = this.printTextAttributes.strokeWidth;
+        ctx.fillStyle = this.printTextAttributes.color;
 
-        if (this.printTextAttribute.strokeWidth > 0) {
+        if (this.printTextAttributes.strokeWidth > 0) {
             ctx.strokeText(args.TEXT, x, y);
         }
 
@@ -1564,6 +1579,7 @@ class Scratch3PenBlocks {
             ? this.preloadedImages.get(URI)
             : await new Promise((resolve, reject) => {
                 const image = new Image();
+                image.crossOrigin = "anonymous";
                 image.onload = () => resolve(image);
                 image.onerror = err => {
                     console.error('failed to load', URI, err);
