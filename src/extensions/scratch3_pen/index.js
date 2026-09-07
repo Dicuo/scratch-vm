@@ -1051,7 +1051,7 @@ class Scratch3PenBlocks {
                     arguments: {
                         WIDTH: {
                             type: ArgumentType.NUMBER,
-                            defaultValue: 0
+                            defaultValue: 5
                         }
                     }
                 },
@@ -1604,8 +1604,10 @@ class Scratch3PenBlocks {
 
         ctx.drawImage(
             image,
-            Cast.toNumber(CROPX), Cast.toNumber(CROPY),
-            Cast.toNumber(CROPW), Cast.toNumber(CROPH),
+            CROPX ? Cast.toNumber(CROPX) : undefined,
+            CROPY ? Cast.toNumber(CROPY) : undefined,
+            CROPW ? Cast.toNumber(CROPW) : undefined,
+            CROPH ? Cast.toNumber(CROPH) : undefined,
             realX, realY,
             width, height
         );
@@ -1685,8 +1687,8 @@ class Scratch3PenBlocks {
 
         ctx.beginPath();
         ctx.moveTo(firstPos.x, -firstPos.y);
-        for (const pos of points) {
-            ctx.lineTo(pos.x, -pos.y);
+        for (let i = 0; i < points.length; i++) {
+            ctx.lineTo(points[i].x, -points[i].y);
         }
         ctx.closePath();
 
@@ -1703,7 +1705,7 @@ class Scratch3PenBlocks {
     drawArrayComplexShape (args, util) {
         const providedData = Cast.toString(args.SHAPE);
         const providedPoints = parseArray(args.SHAPE);
-        if (providedPoints.length <= 6) return; // We need to make a triangle at minimum.
+        if (providedPoints.length < 6) return; // We need to make a triangle at minimum.
 
         // The last point is missing a Y value, Y will be 0 for that point.
         if (providedPoints.length % 2 !== 0) providedPoints.push(0);
