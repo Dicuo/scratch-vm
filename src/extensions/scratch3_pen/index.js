@@ -514,59 +514,59 @@ class Scratch3PenBlocks {
         return [
             {
                 text: 'Sans Serif',
-                value: SANS_SERIF_ID
+                value: Font.SANS_SERIF_ID
             },
             {
                 text: 'Serif',
-                value: SERIF_ID
+                value: Font.SERIF_ID
             },
             {
                 text: 'Handwriting',
-                value: HANDWRITING_ID
+                value: Font.HANDWRITING_ID
             },
             {
                 text: 'Marker',
-                value: MARKER_ID
+                value: Font.MARKER_ID
             },
             {
                 text: 'Curly',
-                value: CURLY_ID
+                value: Font.CURLY_ID
             },
             {
                 text: 'Pixel',
-                value: PIXEL_ID
+                value: Font.PIXEL_ID
             },
             {
                 text: 'Playful',
-                value: PLAYFUL_ID
+                value: Font.PLAYFUL_ID
             },
             {
                 text: 'Bubbly',
-                value: BUBBLY_ID
+                value: Font.BUBBLY_ID
             },
             {
                 text: 'Arcade',
-                value: ARCADE_ID
+                value: Font.ARCADE_ID
             },
             {
                 text: 'Bits and Bytes',
-                value: BITSANDBYTES_ID
+                value: Font.BITSANDBYTES_ID
             },
             {
                 text: 'Technological',
-                value: TECHNOLOGICAL_ID
+                value: Font.TECHNOLOGICAL_ID
             },
             {
                 text: 'Scratch',
-                value: SCRATCH_ID
+                value: Font.SCRATCH_ID
             },
             {
                 text: 'Archivo',
-                value: ARCHIVO_ID
+                value: Font.ARCHIVO_ID
             },
             {
                 text: 'Archivo Black',
-                value: ARCHIVOBLACK_ID
+                value: Font.ARCHIVOBLACK_ID
             },
             ...this.runtime.fontManager.getFonts().map(i => ({
                 text: i.name,
@@ -574,7 +574,7 @@ class Scratch3PenBlocks {
             })),
             {
                 text: 'random font',
-                value: RANDOM_ID
+                value: Font.RANDOM_ID
             }
         ];
     }
