@@ -1177,8 +1177,7 @@ class Scratch3PenBlocks {
                     arguments: {
                         OPTION: {
                             type: ArgumentType.STRING,
-                            menu: 'layerParam',
-                            defaultValue: LayerParam.FRONT
+                            menu: 'layerParam'
                         }
                     },
                     hideFromPalette: true,
