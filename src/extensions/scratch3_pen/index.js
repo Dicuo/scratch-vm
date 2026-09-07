@@ -1643,7 +1643,12 @@ class Scratch3PenBlocks {
         ctx.fillStyle = color;
         ctx.strokeStyle = color;
 
-        ctx.fillRect(args.X, -args.Y, args.WIDTH, args.HEIGHT);
+        ctx.fillRect(
+            Cast.toNumber(args.X),
+            -Cast.toNumber(args.Y),
+            Cast.toNumber(args.WIDTH),
+            Cast.toNumber(args.HEIGHT)
+        );
 
         this._drawContextToPen(ctx);
     }
