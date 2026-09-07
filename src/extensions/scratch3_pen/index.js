@@ -1602,15 +1602,23 @@ class Scratch3PenBlocks {
         const realX = Cast.toNumber(X) - (width / 2);
         const realY = -Cast.toNumber(Y) - (height / 2);
 
-        ctx.drawImage(
-            image,
-            CROPX ? Cast.toNumber(CROPX) : undefined,
-            CROPY ? Cast.toNumber(CROPY) : undefined,
-            CROPW ? Cast.toNumber(CROPW) : undefined,
-            CROPH ? Cast.toNumber(CROPH) : undefined,
-            realX, realY,
-            width, height
-        );
+        const hasCrop = CROPX !== undefined &&
+            CROPY !== undefined &&
+            CROPW !== undefined &&
+            CROPH !== undefined;
+
+        if (hasCrop) {
+            ctx.drawImage(
+                image,
+                Cast.toNumber(CROPX), Cast.toNumber(CROPY),
+                Cast.toNumber(CROPW), Cast.toNumber(CROPH),
+                realX, realY,
+                width, height
+            );
+        } else {
+            ctx.drawImage(image, realX, realY, width, height);
+        }
+
         this._drawContextToPen(ctx);
     }
 
