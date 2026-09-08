@@ -1239,10 +1239,11 @@ class VirtualMachine extends EventEmitter {
     /**
      * TW: Get the raw binary data to use when exporting a costume to the user's local file system.
      * @param {Costume} costumeObject scratch-vm costume object
+     * @param {Boolean} [optIncludeExtras] if true and costume is an SVG, will add things like custom fonts to the export
      * @returns {Uint8Array}
      */
-    getExportedCostume (costumeObject) {
-        return exportCostume(costumeObject);
+    getExportedCostume (costumeObject, optIncludeExtras) {
+        return exportCostume(costumeObject, optIncludeExtras, this);
     }
 
     /**
