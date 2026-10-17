@@ -51,7 +51,8 @@ class Scratch3LooksBlocks {
             text: '',
             type: 'say',
             usageId: null,
-            style: Scratch3LooksBlocks.DEFAULT_BUBBLE_STYLE
+            style: Scratch3LooksBlocks.DEFAULT_BUBBLE_STYLE,
+            _forceSide: false,
         };
     }
 
@@ -149,12 +150,23 @@ class Scratch3LooksBlocks {
      */
     _setBubbleProperty (target, style, value) {
         const object = this._getBubbleState(target);
-        if (!object.style) object.style = Scratch3LooksBlocks.DEFAULT_BUBBLE_STYLE;
+        let shouldRerender = false;
+        if (!object.style) {
+            object.style = Scratch3LooksBlocks.DEFAULT_BUBBLE_STYLE;
+        }
+
         style.forEach((prop, index) => {
+            if (object.style[prop] !== value[index]) {
+                shouldRerender = true;
+            }
+
             object.style[prop] = value[index];
         });
 
         target.setCustomState(Scratch3LooksBlocks.STATE_KEY, object);
+        if (shouldRerender) {
+            this._renderBubble(target);
+        }
     }
 
     /**
@@ -208,6 +220,9 @@ class Scratch3LooksBlocks {
         if (!target.visible) return;
         const bubbleState = this._getBubbleState(target);
         const [bubbleWidth, bubbleHeight] = this.runtime.renderer.getCurrentSkinSize(bubbleState.drawableId);
+
+        this.runtime.renderer._allDrawables[bubbleState.drawableId].setCameraState(target.getCameraState());
+
         let targetBounds;
         try {
             targetBounds = target.getBoundsForBubble();
@@ -221,19 +236,21 @@ class Scratch3LooksBlocks {
                 bottom: target.y
             };
         }
-        const stageSize = this.runtime.renderer.getNativeSize();
-        const stageBounds = {
-            left: -stageSize[0] / 2,
-            right: stageSize[0] / 2,
-            top: stageSize[1] / 2,
-            bottom: -stageSize[1] / 2
-        };
-        if (bubbleState.onSpriteRight && bubbleWidth + targetBounds.right > stageBounds.right &&
-            (targetBounds.left - bubbleWidth > stageBounds.left)) { // Only flip if it would fit
+        const stageBounds = this.runtime.renderer.getCameraBounds(target.getCameraState());
+        if (
+            !bubbleState._forceSide && bubbleState.onSpriteRight &&
+            bubbleWidth + targetBounds.right > stageBounds.right &&
+            (targetBounds.left - bubbleWidth > stageBounds.left)
+        ) {
+            // Only flip if it would fit
             bubbleState.onSpriteRight = false;
             this._renderBubble(target);
-        } else if (!bubbleState.onSpriteRight && targetBounds.left - bubbleWidth < stageBounds.left &&
-            (bubbleWidth + targetBounds.right < stageBounds.right)) { // Only flip if it would fit
+        } else if (
+            !bubbleState._forceSide && !bubbleState.onSpriteRight &&
+            targetBounds.left - bubbleWidth < stageBounds.left &&
+            (bubbleWidth + targetBounds.right < stageBounds.right)
+        ) {
+            // Only flip if it would fit
             bubbleState.onSpriteRight = true;
             this._renderBubble(target);
         } else {
@@ -296,6 +313,7 @@ class Scratch3LooksBlocks {
      */
     _formatBubbleText (text) {
         if (text === '') return text;
+        if (text === null) return '';
 
         // Non-integers should be rounded to 2 decimal places (no more, no less), unless they're small enough that
         // rounding would display them as 0.00. This matches 2.0's behavior:
@@ -306,7 +324,7 @@ class Scratch3LooksBlocks {
         }
 
         // Limit the length of the string.
-        text = String(text).substr(0, this.SAY_BUBBLE_LIMIT);
+        text = Cast.toString(text).substr(0, this.SAY_BUBBLE_LIMIT);
 
         return text;
     }
@@ -351,7 +369,7 @@ class Scratch3LooksBlocks {
             looks_cleargraphiceffects: this.clearEffects,
             looks_changesizeby: this.changeSize,
             looks_setsizeto: this.setSize,
-            looks_changestretchby: () => {}, // legacy no-op blocks
+            looks_changestretchby: () => {},
             looks_setstretchto: () => {},
             looks_gotofrontback: this.goToFrontBack,
             looks_goforwardbackwardlayers: this.goForwardBackwardLayers,
@@ -359,7 +377,7 @@ class Scratch3LooksBlocks {
             looks_costumenumbername: this.getCostumeNumberName,
             looks_backdropnumbername: this.getBackdropNumberName,
 
-            //pm monitors
+            // pm monitors
             looks_getEffectValue: ({EFFECT}, {target}) => target.getEffect(Cast.toString(EFFECT).toLowerCase()),
             looks_getSpriteVisible: ({}, {target}) => target.visible,
             looks_layersGetLayer: ({}, {target}) => target.getLayerOrder(),
@@ -369,7 +387,7 @@ class Scratch3LooksBlocks {
             looks_stretchGetY: ({}, {target}) => target.stretch[1], 
             looks_tintColor: ({}, {target}) => this._getTintColor(target),
 
-            //stupid bubble blocks that i hate
+            // customizable bubble blocks
             looks_setFont: this.setFont,
             looks_setColor: this.setColor,
             looks_setShape: this.setShape,
@@ -890,6 +908,7 @@ class Scratch3LooksBlocks {
             case "CORNER_RADIUS": prop = "cornerRadius"; break;
             case "TAIL_HEIGHT": prop = "tailHeight"; break;
             case "FONT_HEIGHT_RATIO": prop = "fontHeightRatio"; break;
+            case "LINE_HEIGHT": prop = "lineHeight"; break;
         }
         if (!prop) return;
 

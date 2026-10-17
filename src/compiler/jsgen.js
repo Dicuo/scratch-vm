@@ -136,6 +136,7 @@ class JSGenerator {
         this.localVariables = new VariablePool('a');
         this._setupVariablesPool = new VariablePool('b');
         this._setupVariables = {};
+        this.usesTemporaryLocal = false;
 
         this.descendedIntoModulo = false;
         this.isInHat = false;
@@ -202,13 +203,14 @@ class JSGenerator {
         case InputOpcode.CAST_BOOLEAN:
             return `toBoolean(${this.descendInput(node.target)})`;
         case InputOpcode.CAST_NUMBER:
-            if (node.target.isAlwaysType(InputType.BOOLEAN_INTERPRETABLE)) {
-                return `(+${this.descendInput(node.target.toType(InputType.BOOLEAN))})`;
+            if (node.target.isAlwaysType(InputType.BOOLEAN)) {
+                return `(+${this.descendInput(node.target)})`;
             }
+            this.usesTemporaryLocal = true;
             if (node.target.isAlwaysType(InputType.NUMBER_OR_NAN)) {
-                return `toNotNaN(${this.descendInput(node.target)})`;
+                return `((t = ${this.descendInput(node.target)}) === t ? t : 0)`;
             }
-            return `toNotNaN(+${this.descendInput(node.target)})`;
+            return `((t = +${this.descendInput(node.target)}) === t ? t : 0)`;
         case InputOpcode.CAST_NUMBER_OR_NAN:
             return `(+${this.descendInput(node.target)})`;
         case InputOpcode.CAST_NUMBER_INDEX:
@@ -547,6 +549,18 @@ class JSGenerator {
             return `((${this.descendInput(node.text2)}).split(${this.descendInput(node.text1)}).length - 1)`
         case InputOpcode.PM_OP_CONSTRAIN:
             return `Math.min(Math.max(${this.descendInput(node.min)}, ${this.descendInput(node.input)}), ${this.descendInput(node.max)})`;
+        case InputOpcode.PM_OP_DECODE_B16:
+            return `(t => { try { return new TextDecoder().decode(Uint8Array.fromHex(t)); } catch (e) { return ""; } })(${this.descendInput(node.text)})`;
+        case InputOpcode.PM_OP_DECODE_B64:
+            return `decodeBase64ToString(${this.descendInput(node.text)})`;
+        case InputOpcode.PM_OP_DECODE_URI:
+            return `decodeURIComponent(${this.descendInput(node.text)})`;
+        case InputOpcode.PM_OP_ENCODE_B16:
+            return `(new TextEncoder().encode(${this.descendInput(node.text)})).toHex()`;
+        case InputOpcode.PM_OP_ENCODE_B64:
+            return `encodeStringToBase64(${this.descendInput(node.text)})`;
+        case InputOpcode.PM_OP_ENCODE_URI:
+            return `encodeURIComponent(${this.descendInput(node.text)})`;
         case InputOpcode.PM_OP_ENDS_WITH:
             return `String.prototype.endsWith.call(${this.descendInput(node.text)}, ${this.descendInput(node.term)})`;
         case InputOpcode.PM_OP_INDEX_OF_TEXT_IN_TEXT:
@@ -625,7 +639,11 @@ class JSGenerator {
             return `String.prototype.toUpperCase.call(${this.descendInput(node.text)})`;
         case InputOpcode.PM_OP_XOR:
             return `(${this.descendInput(node.left)} !== ${this.descendInput(node.right)})`;
-        
+        case InputOpcode.PM_OP_DIRECTION_COORDINATES:
+            return `runtime.ext_scratch3_sensing._getDirectionToFrom(${this.descendInput(node.x1)}, ${this.descendInput(node.x2)}, ${this.descendInput(node.y1)}, ${this.descendInput(node.y2)})`;
+        case InputOpcode.PM_OP_DISTANCE_COORDINATES:
+            return `Math.hypot(${this.descendInput(node.x2)} - ${this.descendInput(node.x1)}, ${this.descendInput(node.y2)} - ${this.descendInput(node.y1)})`;
+
         case InputOpcode.SENSING_ANSWER:
             return `runtime.ext_scratch3_sensing._answer`;
         case InputOpcode.SENSING_COLOR_TOUCHING_COLOR:
@@ -698,16 +716,28 @@ class JSGenerator {
             return `runtime.ioDevices.keyboard.getKeyIsDown(${this.descendInput(node.key)})`;
 
         //pm sensing
-        case InputOpcode.PM_SENSING_DISTANCE_COORDINATES:
-            return `Math.hypot(${this.descendInput(node.x2)} - ${this.descendInput(node.x1)}, ${this.descendInput(node.y2)} - ${this.descendInput(node.y1)})`;
+        case InputOpcode.PM_SENSING_BROWSER:
+            return `runtime.ext_scratch3_sensing._getBrowser()`;
+        case InputOpcode.PM_SENSING_DRAGGABLE:
+            return `target.draggable`;
+        case InputOpcode.PM_SENSING_FINGER_DOWN:
+            return `runtime.ioDevices.touch.getIsDown(${this.descendInput(node.finger)} - 1)`;
+        case InputOpcode.PM_SENSING_FINGER_TAPPED:
+            return `runtime.ioDevices.touch.getIsTapped(${this.descendInput(node.finger)} - 1)`;
+        case InputOpcode.PM_SENSING_FINGER_X:
+            return `runtime.ioDevices.touch.getScratchX(${this.descendInput(node.finger)} - 1)`;
+        case InputOpcode.PM_SENSING_FINGER_Y:
+            return `runtime.ioDevices.touch.getScratchY(${this.descendInput(node.finger)} - 1)`;
         case InputOpcode.PM_SENSING_HAS_NUMBER:
             return `/\d/.test(Cast.toString(${this.descendInput(node.text)}))`;
         case InputOpcode.PM_SENSING_KEY_HIT:
             return `runtime.ioDevices.keyboard.getKeyIsHit(${this.descendInput(node.key)})`;
         case InputOpcode.PM_SENSING_IS_TEXT:
             return `isNaN(Number(${this.descendInput(node.text)}))`;
+        case InputOpcode.PM_SENSING_LOGGED_IN:
+            return `runtime.ioDevices.userData._loggedIn`;
         case InputOpcode.PM_SENSING_MOBILE:
-            return `(typeof window !== 'undefined' && 'ontouchstart' in window)`
+            return `(typeof window !== 'undefined' && 'ontouchstart' in window)`;
         case InputOpcode.PM_SENSING_MOUSEBTN_CLICKED:
             return `runtime.ioDevices.mouse.getButtonIsClicked(${node.button})`;
         case InputOpcode.PM_SENSING_MOUSEBTN_DOWN:
@@ -715,9 +745,27 @@ class JSGenerator {
         case InputOpcode.PM_SENSING_MOUSEBTN_RELEASED:
             return `runtime.ioDevices.mouse.getButtonIsReleased(${node.button})`;
         case InputOpcode.PM_SENSING_MOUSE_SCROLLING:
-            return `runtime.ext_scratch3_sensing._mouseScrolling(${this.descendInput(node.option)}, runtime.ioDevices.mouseWheel.scrollDelta)`
+            return `runtime.ext_scratch3_sensing._mouseScrolling(${this.descendInput(node.option)}, runtime.ioDevices.mouseWheel.scrollDelta)`;
+        case InputOpcode.PM_SENSING_OBJECT_TOUCHING_CLONE:
+            return `runtime.ext_scratch3_sensing._objectTouchingCloneOfSprite(${this.descendInput(node.object1)}, ${this.descendInput(node.object2)}, target)`;
+        case InputOpcode.PM_SENSING_OBJECT_TOUCHING_OBJECT:
+            return `runtime.ext_scratch3_sensing._objectTouchingObject(${this.descendInput(node.object1)}, ${this.descendInput(node.object2)}, target)`;
+        case InputOpcode.PM_SENSING_OS:
+            return `runtime.ext_scratch3_sensing._getOS()`;
+        case InputOpcode.PM_SENSING_REGEX_TEST:
+            return `runtime.ext_scratch3_sensing._regexTest(${this.descendInput(node.text)}, ${this.descendInput(node.regex)}, ${this.descendInput(node.flags)})`;
+        case InputOpcode.PM_SENSING_SPRITE_WITH_ATTRIB:
+            return `runtime.ext_scratch3_sensing._spriteWithAttrib(${this.descendInput(node.varName)}, ${this.descendInput(node.varValue)})`;
         case InputOpcode.PM_SENSING_TIME_TIMESTAMP:
             return `Date.now()`;
+        case InputOpcode.PM_SENSING_TOUCHING_POINT_X:
+            return `target.objectTouchingPoint(${this.descendInput(node.object)})[0]`;
+        case InputOpcode.PM_SENSING_TOUCHING_POINT_Y:
+            return `target.objectTouchingPoint(${this.descendInput(node.object)})[1]`;
+        case InputOpcode.PM_SENSING_UPPERCASE_TEXT:
+            return `runtime.ext_scratch3_sensing._isTextUppercase(${this.descendInput(node.text)})`;
+        case InputOpcode.PM_SENSING_URL:
+            return `location.href`;
 
         case InputOpcode.VAR_GET:
             return `${this.referenceVariable(node.variable)}.value`;
@@ -1001,7 +1049,6 @@ class JSGenerator {
         }
         case StackOpcode.PM_CONTROL_ESCAPE_LOOP:
             if (this.inLoop) {
-                this.yieldLoop();
                 this.source += this.loopName ? `break ${this.loopName};\n` : 'break;\n';
             } else {
                 this.source += `throw 'All "escape loop" blocks must be inside of a looping block.';\n`;
@@ -1482,6 +1529,50 @@ class JSGenerator {
         case StackOpcode.SENSING_TIMER_RESET:
             this.source += 'runtime.ioDevices.clock.resetProjectTimer();\n';
             break;
+
+        // pm sensing
+        case StackOpcode.PM_SENSING_SET_OF:
+            this.source += `runtime.ext_scratch3_sensing._setAttributeOf(${this.descendInput(node.object)}, ${this.descendInput(node.property)}, ${this.descendInput(node.value)});\n`;
+            break;
+        case StackOpcode.PM_SENSING_SET_OF_BACKDROP:
+            this.source += `runtime.ext_scratch3_looks._setBackdrop(stage, ${this.descendInput(node.value)});\n`;
+            break;
+        case StackOpcode.PM_SENSING_SET_OF_COSTUME: {
+            const targetRef = this.descendTargetReference(node.object);
+            this.source += `if (${targetRef}) runtime.ext_scratch3_looks._setCostume(${targetRef}, ${this.descendInput(node.value)});\n`;
+            break;
+        }
+        case StackOpcode.PM_SENSING_SET_OF_DIRECTION: {
+            const targetRef = this.descendTargetReference(node.object);
+            this.source += `if (${targetRef}) ${targetRef}.setDirection(${this.descendInput(node.value)});\n`;
+            break;
+        }
+        case StackOpcode.PM_SENSING_SET_OF_POS_X: {
+            const targetRef = this.descendTargetReference(node.object);
+            this.source += `if (${targetRef}) ${targetRef}.setXY(${this.descendInput(node.value)}, ${targetRef}.y);\n`;
+            break;
+        }
+        case StackOpcode.PM_SENSING_SET_OF_POS_Y: {
+            const targetRef = this.descendTargetReference(node.object);
+            this.source += `if (${targetRef}) ${targetRef}.setXY(${targetRef}.x, ${this.descendInput(node.value)});\n`;
+            break;
+        }
+        case StackOpcode.PM_SENSING_SET_OF_SIZE: {
+            const targetRef = this.descendTargetReference(node.object);
+            this.source += `if (${targetRef}) ${targetRef}.setSize(${this.descendInput(node.value)});\n`;
+            break;
+        }
+        case StackOpcode.PM_SENSING_SET_OF_VAR: {
+            const targetRef = this.descendTargetReference(node.object);
+            const varRef = this.evaluateOnce(`${targetRef} && ${targetRef}.lookupVariableByNameAndType("${sanitize(node.property)}", "", true)`);
+            this.source += `if (${varRef}) ${varRef}.value = ${this.descendInput(node.value)};\n;`;
+            break;
+        }
+        case StackOpcode.PM_SENSING_SET_OF_VOLUME: {
+            const targetRef = this.descendTargetReference(node.object);
+            this.source += `if (${targetRef}) runtime.ext_scratch3_sound._updateVolume(${this.descendInput(node.value)}, ${targetRef});\n`;
+            break;
+        }
 
         case StackOpcode.DEBUGGER:
             this.source += 'debugger;\n';

@@ -7,7 +7,7 @@ const SemVer = require('../util/semver');
  */
 export function compatBlock(block, pmVersion) {
     /* --- PRE-PORT COMPATABILITY --- */
-    if (pmVersion.equal('0.0.0')) {
+    if (pmVersion.lessThan('0.1.0')) {
         //control_expandableIf
         if (block.opcode === "control_expandableIf" && block.mutation) {
             let value = Number(block.mutation.branches) * 2 - 2;
@@ -59,6 +59,66 @@ export function compatBlock(block, pmVersion) {
 
         //procedures_call
         if (block.opcode === "procedures_call") {
+            // debugger!!!
+            switch (block.mutation.proccode) {
+                case "​​breakpoint​​":
+                    return {
+                        id: block.id,
+                        opcode: "jwDebugger_breakpoint",
+                        next: block.next,
+                        parent: block.parent,
+                        inputs: {},
+                        fields: {},
+                        x: block.x,
+                        y: block.y
+                    };
+                case "​​log​​ %s":
+                    block = {
+                        id: block.id,
+                        opcode: "jwDebugger_log",
+                        next: block.next,
+                        parent: block.parent,
+                        inputs: {
+                            DATA: {...block.inputs.arg0, name: "DATA"}
+                        },
+                        fields: {
+                            LOG: {name: "LOG", value: "log"}
+                        },
+                        x: block.x,
+                        y: block.y
+                    };
+                case "​​warn​​ %s":
+                    block = {
+                        id: block.id,
+                        opcode: "jwDebugger_log",
+                        next: block.next,
+                        parent: block.parent,
+                        inputs: {
+                            DATA: {...block.inputs.arg0, name: "DATA"}
+                        },
+                        fields: {
+                            LOG: {name: "LOG", value: "warn"}
+                        },
+                        x: block.x,
+                        y: block.y
+                    };
+                case "​​error​​ %s":
+                    block = {
+                        id: block.id,
+                        opcode: "jwDebugger_log",
+                        next: block.next,
+                        parent: block.parent,
+                        inputs: {
+                            DATA: {...block.inputs.arg0, name: "DATA"}
+                        },
+                        fields: {
+                            LOG: {name: "LOG", value: "error"}
+                        },
+                        x: block.x,
+                        y: block.y
+                    };
+            }
+
             if (block.mutation.returns === "true") block.mutation.return = `[null, ${block.mutation.optype === "\"boolean\"" ? "1" : "2"}]`;
             if (block.mutation.optype === "\"end\"") block.mutation.terminal = "true";
             if (block.mutation.color) block.mutation.colour = JSON.parse(block.mutation.color)[0];
@@ -89,6 +149,16 @@ export function compatBlock(block, pmVersion) {
         if (block.opcode === "procedures_return" && block.inputs.return) {
             block.inputs.VALUE = {name: "VALUE", block: block.inputs.return.block, shadow: block.inputs.return.shadow};
             delete block.inputs.return;
+        }
+
+        //sensing_distanceTo
+        if (block.opcode === "sensing_distanceTo") {
+            block.opcode = "operator_distanceTo"
+        }
+
+        //sensing_directionTo
+        if (block.opcode === "sensing_directionTo") {
+            block.opcode = "operator_directionTo"
         }
     }
 

@@ -7,6 +7,7 @@ const MenuType = require('../extension-support/menu-type');
 const Blocks = require('./blocks');
 const BlocksRuntimeCache = require('./blocks-runtime-cache');
 const BlockType = require('../extension-support/block-type');
+const TabManager = require('../extension-support/pm-tab-manager');
 const Profiler = require('./profiler');
 const Sequencer = require('./sequencer');
 const execute = require('./execute.js');
@@ -36,6 +37,7 @@ const Cloud = require('../io/cloud');
 const Keyboard = require('../io/keyboard');
 const Mouse = require('../io/mouse');
 const MouseWheel = require('../io/mouseWheel');
+const Touch = require('../io/touch');
 const UserData = require('../io/userData');
 const Video = require('../io/video');
 
@@ -407,6 +409,7 @@ class Runtime extends EventEmitter {
             keyboard: new Keyboard(this),
             mouse: new Mouse(this),
             mouseWheel: new MouseWheel(this),
+            touch: new Touch(this),
             userData: new UserData(),
             video: new Video(this)
         };
@@ -578,6 +581,11 @@ class Runtime extends EventEmitter {
         this.extensionStorage = {};
 
         /**
+         * Manages extension tabs.
+         */
+        this.tabManager = new TabManager(this);
+      
+        /**
          * Total number of blocks in project.
          * @type {Number}
          */
@@ -597,10 +605,13 @@ class Runtime extends EventEmitter {
         this.serializers = {};
 
         // pm version
-        this.pmVersion = new SemVer('0.1.0');
+        this.pmVersion = new SemVer('0.2.1');
 
         // deprecated camera states
         this.cameraStates = {};
+
+        // stepping thread for pausing while in a thread
+        this.steppingThread = null;
     }
 
     /**
@@ -1049,6 +1060,13 @@ class Runtime extends EventEmitter {
      */
     static get PLATFORM_MISMATCH () {
         return 'PLATFORM_MISMATCH';
+    }
+
+    /**
+     * Event name when the editor tab list is updated.
+     */
+    static get EDITOR_TABS_UPDATE () {
+        return 'EDITOR_TABS_UPDATE';
     }
 
     /**
@@ -2932,6 +2950,10 @@ class Runtime extends EventEmitter {
             thread.pause();
         }
         this.emit(Runtime.RUNTIME_PAUSED);
+
+        if (vm.runtime.sequencer.activeThread) {
+            this.steppingThread = this.vm.runtime.sequencer.activeThread;
+        }
     }
 
     /**
@@ -2954,6 +2976,38 @@ class Runtime extends EventEmitter {
             thread.play();
         }
         this.emit(Runtime.RUNTIME_UNPAUSED);
+
+        if (this.steppingThread) {
+            const getThreadIndex = (thread) => {
+                // We can't use vm.runtime.threads.indexOf(thread) because threads can be restarted.
+                // This can happens when, for example, a "when I receive message1" script broadcasts message1.
+                // The object in runtime.threads is replaced when this happens.
+                if (!thread) return -1;
+                return vm.runtime.threads.findIndex(
+                    (otherThread) =>
+                    otherThread.target === thread.target &&
+                    otherThread.topBlock === thread.topBlock &&
+                    otherThread.stackClick === thread.stackClick &&
+                    otherThread.updateMonitor === thread.updateMonitor
+                );
+            };
+
+            // If we paused in the middle of a tick, we need to make sure to step the scripts that didn't get
+            // stepped in that tick to avoid affecting project behavior.
+            const threads = vm.runtime.threads;
+            const startingIndex = getThreadIndex(this.steppingThread);
+            if (startingIndex !== -1) {
+                for (let i = startingIndex; i < threads.length; i++) {
+                    const thread = threads[i];
+                    const status = thread.status;
+                    if (status === STATUS_RUNNING || status === STATUS_YIELD || status === STATUS_YIELD_TICK) {
+                        vm.runtime.sequencer.activeThread = thread;
+                        vm.runtime.sequencer.stepThread(thread);
+                    }
+                }
+            }
+            this.steppingThread = null;
+        }
     }
 
     /**
@@ -3858,7 +3912,7 @@ class Runtime extends EventEmitter {
         const varType = (typeof optVarType === 'string') ? optVarType : Variable.SCALAR_TYPE;
         const allVariableNames = this.getAllVarNamesOfType(varType);
         const newName = StringUtil.unusedName(variableName, allVariableNames);
-        const variable = new Variable(optVarId || uid(), newName, varType);
+        const variable = Variable.create(optVarId || uid(), newName, varType);
         const stage = this.getTargetForStage();
         stage.variables[variable.id] = variable;
         return variable;

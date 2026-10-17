@@ -132,7 +132,7 @@ class Target extends EventEmitter {
         if (variable) return variable;
 
         // No variable with this name exists - create it locally.
-        const newVariable = new Variable(id, name, Variable.SCALAR_TYPE, false);
+        const newVariable = Variable.create(id, name, Variable.SCALAR_TYPE, false);
         this.variables[id] = newVariable;
         return newVariable;
     }
@@ -255,7 +255,7 @@ class Target extends EventEmitter {
         if (list) return list;
 
         // No variable with this name exists - create it locally.
-        const newList = new Variable(id, name, Variable.LIST_TYPE, false);
+        const newList = Variable.create(id, name, Variable.LIST_TYPE, false);
         this.variables[id] = newList;
         return newList;
     }
@@ -271,7 +271,7 @@ class Target extends EventEmitter {
      */
     createVariable (id, name, type, isCloud) {
         if (!Object.prototype.hasOwnProperty.call(this.variables, id)) {
-            const newVariable = new Variable(id, name, type, false);
+            const newVariable = Variable.create(id, name, type, false);
             if (isCloud && this.isStage && this.runtime.canAddCloudVariable()) {
                 newVariable.isCloud = true;
                 this.runtime.addCloudVariable();
@@ -342,6 +342,8 @@ class Target extends EventEmitter {
                         });
                         // Request workspace change only if sensing_of blocks were actually updated.
                         if (blockUpdated) this.runtime.requestBlocksUpdate();
+                    } else if (variable.type === Variable.BROADCAST_MESSAGE_TYPE) {
+                        variable.value = variable.name; // value must be same as name
                     }
 
                     const blocks = this.runtime.monitorBlocks;
@@ -417,7 +419,8 @@ class Target extends EventEmitter {
     duplicateVariable (id, optKeepOriginalId) {
         if (Object.prototype.hasOwnProperty.call(this.variables, id)) {
             const originalVariable = this.variables[id];
-            const newVariable = new Variable(
+            const newVariable = Variable.createSibling(
+                originalVariable,
                 optKeepOriginalId ? id : null, // conditionally keep original id or generate a new one
                 originalVariable.name,
                 originalVariable.type,
@@ -602,7 +605,7 @@ class Target extends EventEmitter {
         if (existingLocalVar) {
             newVarId = existingLocalVar.id;
         } else {
-            const newVar = new Variable(null, varName, varType);
+            const newVar = Variable.create(null, varName, varType);
             newVarId = newVar.id;
             sprite.variables[newVarId] = newVar;
         }
