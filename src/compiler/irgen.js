@@ -373,7 +373,7 @@ class ScriptTreeGenerator {
             const broadcastOption = block.fields.BROADCAST_OPTION;
             const broadcastVariable = this.target.lookupBroadcastMsg(broadcastOption.id, broadcastOption.value);
             // TODO: empty string probably isn't the correct fallback
-            const broadcastName = broadcastVariable ? broadcastVariable.name : '';
+            const broadcastName = broadcastVariable ? broadcastVariable.name : (broadcastOption.value === 'message1' ? 'message1' : '');
             return this.createConstantInput(broadcastName);
         }
 
@@ -391,6 +391,10 @@ class ScriptTreeGenerator {
             return new IntermediateInput(InputOpcode.LOOKS_SIZE_GET, InputType.NUMBER_POS | InputType.NUMBER_ZERO);
         
         //pm looks
+        case 'looks_backdrops':
+            return this.createConstantInput(block.fields.BACKDROP.value);
+        case 'looks_costume':
+            return this.createConstantInput(block.fields.COSTUME.value);
         case 'looks_getEffectValue':
             return new IntermediateInput(InputOpcode.PM_LOOKS_GET_EFFECT, InputType.NUMBER, {
                 effect: block.fields.EFFECT.value.toLowerCase()
@@ -628,6 +632,13 @@ class ScriptTreeGenerator {
             return new IntermediateInput(InputOpcode.PM_OP_CODE_TO_CHARACTER, InputType.STRING, {
                 one: this.descendInputOfBlock(block, 'ONE').toType(InputType.NUMBER)
             });
+        case 'operator_constant':
+            switch (block.fields.CONSTANT.value) {
+                case 'pi': return this.createConstantInput(Math.PI);
+                case 'euler': return this.createConstantInput(Math.E);
+                case 'goldenratio': return this.createConstantInput((1 + Math.sqrt(5)) / 2);
+            }
+            return this.createConstantInput(0);
         case 'operator_countAppearTimes':
             return new IntermediateInput(InputOpcode.PM_OP_COUNT_APPEAR_TIMES, InputType.NUMBER, {
                 text1: this.descendInputOfBlock(block, 'TEXT1').toType(InputType.STRING),
@@ -821,6 +832,11 @@ class ScriptTreeGenerator {
                 regex: this.descendInputOfBlock(block, 'reg').toType(InputType.STRING),
                 flags: this.descendInputOfBlock(block, 'regrule').toType(InputType.STRING)
             });
+        case 'operator_repeat':
+            return new IntermediateInput(InputOpcode.PM_OP_REPEAT, InputType.STRING, {
+                text: this.descendInputOfBlock(block, 'TEXT').toType(InputType.STRING),
+                times: this.descendInputOfBlock(block, 'TIMES').toType(InputType.NUMBER)
+            });
         case 'operator_replaceAll':
             return new IntermediateInput(InputOpcode.PM_OP_REPLACEALL, InputType.STRING, {
                 text: this.descendInputOfBlock(block, 'text').toType(InputType.STRING),
@@ -846,7 +862,7 @@ class ScriptTreeGenerator {
             return new IntermediateInput(block.fields.OPTION.value === 'ends' ? InputOpcode.PM_OP_ENDS_WITH : InputOpcode.PM_OP_STARTS_WITH, InputType.BOOLEAN, {
                 text: this.descendInputOfBlock(block, 'TEXT1').toType(InputType.STRING),
                 term: this.descendInputOfBlock(block, 'TEXT2').toType(InputType.STRING)
-            })
+            });
         case 'operator_toUpperLowerCase': {
             let text = this.descendInputOfBlock(block, 'TEXT').toType(InputType.STRING);
             switch (block.fields.OPTION.value) {
@@ -855,6 +871,10 @@ class ScriptTreeGenerator {
                 default: return text;
             }
         }
+        case 'operator_trim':
+            return new IntermediateInput(InputOpcode.PM_OP_TRIM, InputType.STRING, {
+                text: this.descendInputOfBlock(block, 'TEXT').toType(InputType.STRING)
+            });
         case 'operator_trueBoolean':
             return this.createConstantInput(true);
         case 'operator_xnor':
@@ -1076,6 +1096,8 @@ class ScriptTreeGenerator {
                 regex: this.descendInputOfBlock(block, 'reg').toType(InputType.STRING),
                 flags: this.descendInputOfBlock(block, 'regrule').toType(InputType.STRING)
             });
+        case 'sensing_sprites':
+            return this.createConstantInput(block.fields.SPRITE.value);
         case 'sensing_thing_has_number': {
             let text = this.descendInputOfBlock(block, 'TEXT1');
             if (text.isSubtypeOf(InputType.NUMBER)) return this.createConstantInput(true);
@@ -1204,7 +1226,7 @@ class ScriptTreeGenerator {
                 target: this.descendInputOfBlock(block, 'CLONE_OPTION').toType(InputType.STRING)
             });
         case 'control_delete_this_clone':
-            return new IntermediateStackBlock(StackOpcode.CONTROL_CLONE_DELETE, {}, true);
+            return new IntermediateStackBlock(StackOpcode.CONTROL_CLONE_DELETE);
         case 'control_forever':
             return new IntermediateStackBlock(StackOpcode.CONTROL_WHILE, {
                 condition: this.createConstantInput(true).toType(InputType.BOOLEAN),
@@ -1250,7 +1272,7 @@ class ScriptTreeGenerator {
         case 'control_stop': {
             const level = block.fields.STOP_OPTION.value;
             if (level === 'all') {
-                return new IntermediateStackBlock(StackOpcode.CONTROL_STOP_ALL, {}, true);
+                return new IntermediateStackBlock(StackOpcode.CONTROL_STOP_ALL);
             } else if (level === 'other scripts in sprite' || level === 'other scripts in stage') {
                 return new IntermediateStackBlock(StackOpcode.CONTROL_STOP_OTHERS);
             } else if (level === 'this script') {
@@ -2014,6 +2036,8 @@ class ScriptTreeGenerator {
             }
 
             const node = this.descendStackedBlock(block);
+            node.blockId = blockId;
+
             this.script.yields = this.script.yields || node.yields;
             if(this.script.isProcedure && node.opcode === StackOpcode.PM_PROCEDURE_REEVALUATE) {
                 this.script.reevaled.add(node.inputs.index)
@@ -2157,9 +2181,10 @@ class ScriptTreeGenerator {
             return null;
         }
         try {
+            const input = this.descendInput(block);
             return new IntermediateStackBlock(StackOpcode.VISUAL_REPORT, {
-                input: this.descendInput(block)
-            });
+                input
+            }, input.yields);
         } catch (e) {
             return null;
         }
@@ -2394,8 +2419,10 @@ class ScriptTreeGenerator {
             // interpreter parity, but the reuslt is ignored.
             const opcodeFunction = this.runtime.getOpcodeFunction(opcode);
             if (opcodeFunction) {
+                const hat = this.descendCompatLayerStack(hatBlock);
+                this.script.yields = this.script.yields || hat.yields;
                 return new IntermediateStack([
-                    this.descendCompatLayerStack(hatBlock),
+                    hat,
                     ...this.walkStack(nextBlock).blocks
                 ]);
             }

@@ -516,7 +516,7 @@ class Scratch3LooksBlocks {
             target.setCostume(optZeroIndex ? requestedCostume : requestedCostume - 1);
         } else {
             // Strings should be treated as costume names, where possible
-            const costumeIndex = target.getCostumeIndexByName(requestedCostume.toString());
+            const costumeIndex = target.getCostumeIndexByName(Cast.toString(requestedCostume));
 
             if (costumeIndex !== -1) {
                 target.setCostume(costumeIndex);
@@ -550,7 +550,7 @@ class Scratch3LooksBlocks {
             stage.setCostume(optZeroIndex ? requestedBackdrop : requestedBackdrop - 1);
         } else {
             // Strings should be treated as backdrop names where possible
-            const costumeIndex = stage.getCostumeIndexByName(requestedBackdrop.toString());
+            const costumeIndex = stage.getCostumeIndexByName(Cast.toString(requestedBackdrop));
 
             if (costumeIndex !== -1) {
                 stage.setCostume(costumeIndex);
@@ -758,7 +758,7 @@ class Scratch3LooksBlocks {
         if (option === '_stage_') ibTarget = this.runtime.getTargetForStage();
         else ibTarget = this.runtime.getSpriteTargetByName(option);
 
-        if (ibTarget) {
+        if (!target.isStage && ibTarget) {
             target.goBehindOther(ibTarget);
             if (infront) target.goForwardLayers(1);
         }

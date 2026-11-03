@@ -26,6 +26,7 @@ const fetchWithTimeout = require('../util/fetch-with-timeout');
 const platform = require('./tw-platform.js');
 const safeStringify = require('../util/tw-safe-stringify.js');
 const MonitorState = require('./tw-monitor-state.js');
+const Sampler = require('./tw-sampler.js');
 const SemVer = require('../util/semver.js');
 const MathUtil = require('../util/math-util.js');
 const pmSymbol = require('../util/symbol.js');
@@ -59,8 +60,6 @@ const defaultBlockPackages = {
 const interpolate = require('./tw-interpolate');
 const FrameLoop = require('./tw-frame-loop');
 const MonitorRecord = require('./monitor-record.js');
-
-const defaultExtensionColors = ['#0FBD8C', '#0DA57A', '#0B8E69'];
 
 const COMMENT_CONFIG_MAGIC = ' // _twconfig_';
 
@@ -421,10 +420,18 @@ class Runtime extends EventEmitter {
 
         /**
          * A runtime profiler that records timed events for later playback to
-         * diagnose Scratch performance.
+         * diagnose Scratch performance. This uses an instrumentation approach
+         * and gathers limited data. The sampler is more useful for analyzing
+         * performance on a per-block basis.
          * @type {Profiler}
          */
         this.profiler = null;
+
+        /**
+         * Sampling profiler.
+         * @type {Sampler}
+         */
+        this.sampler = new Sampler(this);
 
         this.cloudOptions = {
             limit: 10
@@ -605,7 +612,7 @@ class Runtime extends EventEmitter {
         this.serializers = {};
 
         // pm version
-        this.pmVersion = new SemVer('0.2.1');
+        this.pmVersion = new SemVer('0.4.3');
 
         // deprecated camera states
         this.cameraStates = {};
@@ -1070,6 +1077,13 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Event name when global procedures should be published to ScratchBlocks.
+     */
+    static get PUBLISH_GLOBAL_PROCS () {
+        return 'PUBLISH_GLOBAL_PROCS';
+    }
+
+    /**
      * How rapidly we try to step threads by default, in ms.
      */
     static get THREAD_STEP_INTERVAL () {
@@ -1242,8 +1256,6 @@ class Runtime extends EventEmitter {
             categoryInfo.color = extensionInfo.color;
         } else if (extensionInfo.color1) {
             categoryInfo.color = extensionInfo.color1;
-        } else {
-            categoryInfo.color = defaultExtensionColors[0];
         }
 
         // undefined will default to the regular text color
@@ -1415,8 +1427,13 @@ class Runtime extends EventEmitter {
                 type: 'field_dropdown',
                 name: menuName,
                 options: this._convertMenuItems(menuInfo.items),
-            }]
+            }],
+            extensions: []
         };
+
+        if (!categoryInfo.colour) {
+            baseJson.extensions.push('default_extension_colors', 'colours_pen');
+        }
 
         switch (menuInfo.menuType) {
             case MenuType.STRICT:
@@ -1428,15 +1445,11 @@ class Runtime extends EventEmitter {
 
             case MenuType.TYPEABLE:
                 baseJson.colour = '#FFFFFF';
-                baseJson.colourSecondary = '#FFFFFF';
-                baseJson.colourTertiary = '#FFFFFF';
                 baseJson.args0[0].type = 'field_textdropdown';
                 break;
 
             case MenuType.TYPEABLE_NUMERIC:
                 baseJson.colour = '#FFFFFF';
-                baseJson.colourSecondary = '#FFFFFF';
-                baseJson.colourTertiary = '#FFFFFF';
                 baseJson.args0[0].type = 'field_numberdropdown';
                 break;
 
@@ -1502,7 +1515,8 @@ class Runtime extends EventEmitter {
                                 name: menuName,
                                 options: menuItems
                             }))
-                ]
+                ],
+                extensions: categoryInfo.color ? [] : ['default_extension_colors', 'colours_pen']
             }
         };
     }
@@ -1611,7 +1625,8 @@ class Runtime extends EventEmitter {
             blockJSON,
             categoryInfo,
             blockInfo,
-            inputList: []
+            inputList: [],
+            alignment: null
         };
 
         // If an icon for the extension exists, prepend it to each block, with a vertical separator.
@@ -1623,12 +1638,8 @@ class Runtime extends EventEmitter {
         blockJSON.extensions.push('from_extension');
 
         // Allow easily detecting which blocks use default colors
-        if (
-            blockJSON.colour === defaultExtensionColors[0] &&
-            blockJSON.colourSecondary === defaultExtensionColors[1] &&
-            blockJSON.colourTertiary === defaultExtensionColors[2]
-        ) {
-            blockJSON.extensions.push('default_extension_colors');
+        if (!blockJSON.colour) {
+            blockJSON.extensions.push('default_extension_colors', 'colours_pen');
         }
 
         if (iconURI) {
@@ -1744,6 +1755,12 @@ class Runtime extends EventEmitter {
                 } else {
                     blockJSON[`message${outLineNum}`] = convertedText;
                 }
+
+                if (context.alignment != null) {
+                    blockJSON[`lastDummyAlign${outLineNum}`] = context.alignment;
+                    context.alignment = null;
+                }
+
                 ++inTextNum;
                 ++outLineNum;
             }
@@ -1757,6 +1774,15 @@ class Runtime extends EventEmitter {
                 }];
                 ++inBranchNum;
                 ++outLineNum;
+            }
+        }
+
+        // old alignment support
+        if (blockInfo.alignments) {
+            for (let [i, alignment] of Object.entries(blockInfo.alignments)) {
+                if (typeof alignment === "string") {
+                    blockJSON[`lastDummyAlign${i}`] = alignment;
+                }
             }
         }
 
@@ -2036,6 +2062,10 @@ class Runtime extends EventEmitter {
         // laid out
         let argJSON;
 
+        if (argInfo.alignment) {
+            context.alignment = argInfo.alignment;
+        }
+
         // Most field types are inputs (slots on the block that can have other blocks plugged into them)
         // check if this is not one of those cases. E.g. an inline image on a block.
         if (argTypeInfo.fieldType === 'field_image') {
@@ -2168,6 +2198,10 @@ class Runtime extends EventEmitter {
 
                 if (argInfo.fillIn || argInfo.fillInGlobal) {
                     shadowType = argInfo.fillInGlobal || `${context.categoryInfo.id}_${argInfo.fillIn}`;
+                }
+
+                if (context.alignment) {
+                    argJSON.align = context.alignment;
                 }
             }
             argJSON._shadow = { valueName, shadowType, fieldName, variableID, variableName, variableType, defaultValue };
@@ -3052,7 +3086,9 @@ class Runtime extends EventEmitter {
         interpolate.interpolate(this, progressInFrame);
 
         if (this.renderer) {
+            if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RENDERER;
             this.renderer.draw();
+            if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.IDLE;
         }
     }
 
@@ -3073,6 +3109,8 @@ class Runtime extends EventEmitter {
         // pm: RUNTIME_STEP_START runs before BEFORE_EXECUTE
         // this runs before any processing of this new step
         this.emit(Runtime.RUNTIME_STEP_START);
+      
+        if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RUNTIME;
 
         if (this.interpolationEnabled) {
             interpolate.setupInitialState(this);
@@ -3132,7 +3170,9 @@ class Runtime extends EventEmitter {
             // Checking for the animation frame loop is more reliable than using
             // interpolationEnabled in some edge cases
             if (!document.hidden && !this.frameLoop._interpolationAnimation) {
+                if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RENDERER;
                 this.renderer.draw();
+                if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RUNTIME;
             }
             if (this.profiler !== null) {
                 this.profiler.stop();
@@ -3158,6 +3198,8 @@ class Runtime extends EventEmitter {
             this._lastStepTime = Date.now();
         }
 
+        if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.IDLE;
+      
         // pm: RUNTIME_STEP_END runs after AFTER_EXECUTE
         this.emit(Runtime.RUNTIME_STEP_END);
     }
@@ -3340,6 +3382,7 @@ class Runtime extends EventEmitter {
      * @param {string} options.procedureCode The ID of the block
      * @param {function} options.callback The callback, called with (args, BlockUtility). May return a promise.
      * @param {string[]} [options.arguments] Names of the arguments accepted. Optional if no arguments.
+     * @param {string[]} [options.argumentDefaults] Default values of the arguments.
      * @param {boolean} [options.hidden] True to not include this block in the block palette
      * @param {1|2} [options.return] 1 for round reporter, 2 for boolean reported, leave empty for statement.
      */
@@ -3349,7 +3392,10 @@ class Runtime extends EventEmitter {
         const argumentNames = options.arguments || [];
         const names = argumentNames;
         const ids = argumentNames.map((_, i) => `arg${i}`);
-        const defaults = argumentNames.map(() => '');
+        const argumentDefaults = options.argumentDefaults || [];
+        const defaults = argumentNames.map((_, i) => (
+            typeof argumentDefaults[i] === 'undefined' ? '' : `${argumentDefaults[i]}`
+        ));
         this.addonBlocks[procedureCode] = {
             namesIdsDefaults: [names, ids, defaults],
             ...options
@@ -3376,6 +3422,18 @@ class Runtime extends EventEmitter {
                 };
                 this._blockInfo.unshift(blockInfo);
             }
+
+            const argumentTypes = procedureCode.match(/%[nbs]/g) || [];
+            const shadows = argumentTypes.map((type, i) => {
+                if (defaults[i] === '' || (type !== '%s' && type !== '%n')) {
+                    return '';
+                }
+                const shadowType = type === '%n' ? 'math_number' : 'text';
+                const fieldName = type === '%n' ? 'NUM' : 'TEXT';
+                return `<value name="${xmlEscape(ids[i])}"><shadow type="${shadowType}">` +
+                    `<field name="${fieldName}">${xmlEscape(defaults[i])}</field></shadow></value>`;
+            }).join('');
+
             blockInfo.blocks.push({
                 info: {},
                 xml:
@@ -3385,7 +3443,7 @@ class Runtime extends EventEmitter {
                     ` argumentids="${xmlEscape(JSON.stringify(ids))}"` +
                     ` argumentdefaults="${xmlEscape(JSON.stringify(defaults))}"` +
                     `${options.return ? ` return="${xmlEscape(options.return.toString())}"` : ''}` +
-                    '></mutation></block>'
+                    `></mutation>${shadows}</block>`
             });
         }
 
@@ -4190,6 +4248,9 @@ class Runtime extends EventEmitter {
         }
     }
 
+    /**
+     * Counts & updates the number of blocks in the project.
+     */
     updateProjectBlockCounter () {
         let total = 0;
         for (let i = 0; i < this.targets.length; i++) {
@@ -4200,6 +4261,14 @@ class Runtime extends EventEmitter {
         }
 
         this._projectBlockCount = total;
+    }
+
+    /**
+     * Publishes global procedure mutations to ScratchBlocks.
+     * @param {Array<Object>} mutations list of objects representing a mutation to publish
+     */
+    publishGlobalProcMutations (mutations) {
+        alert("Error: GUI has not overridden 'publishGlobalProcMutations'")
     }
 }
 

@@ -34,8 +34,9 @@ const defaultBuiltinExtensions = {
     pmMotionExpansion: () => require('../extensions/penguinmod/pmMotionExpansion'),
     pmEventsExpansion: () => require('../extensions/penguinmod/pmEventsExpansion'),
     pmControlsExpansion: () => require('../extensions/penguinmod/pmControlsExpansion'),
-    pmOperatorsExpansion: () => require('../extensions/penguinmod/pmOperatorsExpansion'),
     pmSensingExpansion: () => require('../extensions/penguinmod/pmSensingExpansion'),
+    pmOperatorsExpansion: () => require('../extensions/penguinmod/pmOperatorsExpansion'),
+    pmStringsExpansion: () => require('../extensions/penguinmod/pmStringsExpansion'),
 
     // jwklong
     jwArray: () => require('../extensions/penguinmod/jwArray'),
@@ -289,7 +290,6 @@ class ExtensionManager {
             const extensionObjects = await load(rewritten, this.vm)
                 .catch(error => this._failedLoadingExtensionScript(error));
             const fakeWorkerId = this.nextExtensionWorker++;
-            this.workerURLs[fakeWorkerId] = extensionURL;
 
             for (const extensionObject of extensionObjects) {
                 const extensionInfo = extensionObject.getInfo();
@@ -301,6 +301,7 @@ class ExtensionManager {
                 await this.loadNewDependencies(extensionInfo.id);
             }
 
+            this.workerURLs[fakeWorkerId] = extensionURL;
             this._finishedLoadingExtensionScript();
             return;
         }
@@ -418,6 +419,7 @@ class ExtensionManager {
         const workerInfo = this.pendingWorkers[id];
         delete this.pendingWorkers[id];
         if (e) {
+            delete this.workerURLs[id];
             workerInfo.reject(e);
         } else {
             workerInfo.resolve();

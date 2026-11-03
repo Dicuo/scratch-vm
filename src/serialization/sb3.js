@@ -1279,7 +1279,7 @@ const parseScratchObject = function (object, runtime, pmVersion, extensions, zip
                 blockJSON.opcode === 'procedures_prototype' &&
                 blockJSON.mutation.global === 'true'
             ) {
-                globalBlocksToRepair.push(blockJSON.mutation.proccode);
+                globalBlocksToRepair.push(blockJSON.mutation);
             }
 
             // If the block is from an extension, record it.
@@ -1416,11 +1416,19 @@ const parseScratchObject = function (object, runtime, pmVersion, extensions, zip
         target.extensionStorage = object.extensionStorage;
     }
 
-    // Repair global block target links
+    // Repair global block target links & publish mutations to Blockly.
     if (globalBlocksToRepair.length) {
-        for (const proccode of globalBlocksToRepair) {
-            runtime._globalProcedureSourceMap[proccode] = target.id;
+        const blocklyGlobalProcs = [];
+        const mutationToXML = target.blocks.mutationToXML;
+        for (const mutation of globalBlocksToRepair) {
+            runtime._globalProcedureSourceMap[mutation.proccode] = target.id;
+            blocklyGlobalProcs.push({
+                proccode: mutation.proccode,
+                textContent: mutationToXML(mutation),
+            });
         }
+
+        runtime.emit(Runtime.PUBLISH_GLOBAL_PROCS, blocklyGlobalProcs);
     }
 
     Promise.all(costumePromises).then(costumes => {
@@ -1501,7 +1509,9 @@ const deserializeMonitor = function (monitorData, runtime, targets, extensions) 
 
     // If the runtime already has a monitor block for this monitor's id,
     // update the existing block with the relevant monitor information.
-    const existingMonitorBlock = runtime.monitorBlocks._blocks[monitorData.id];
+    const existingMonitorBlock = hasOwnProperty.call(runtime.monitorBlocks._blocks, monitorData.id) ?
+        runtime.monitorBlocks._blocks[monitorData.id] :
+        null;
     if (existingMonitorBlock) {
         // A monitor block already exists if the toolbox has been loaded and
         // the monitor block is not target specific (because the block gets recycled).
