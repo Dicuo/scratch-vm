@@ -612,7 +612,7 @@ class Runtime extends EventEmitter {
         this.serializers = {};
 
         // pm version
-        this.pmVersion = new SemVer('0.4.3');
+        this.pmVersion = new SemVer('0.5.5');
 
         // deprecated camera states
         this.cameraStates = {};
@@ -1431,16 +1431,15 @@ class Runtime extends EventEmitter {
             extensions: []
         };
 
-        if (!categoryInfo.colour) {
-            baseJson.extensions.push('default_extension_colors', 'colours_pen');
-        }
-
         switch (menuInfo.menuType) {
             case MenuType.STRICT:
                 baseJson.outputShape = ScratchBlocksConstants.OUTPUT_SHAPE_SQUARE;
                 break;
 
             case MenuType.ACCEPTING:
+                if (!categoryInfo.color) {
+                    baseJson.extensions.push('default_extension_colors', 'colours_pen');
+                }
                 break;
 
             case MenuType.TYPEABLE:
@@ -1911,9 +1910,8 @@ class Runtime extends EventEmitter {
         return {
             type: 'field_image',
             src: argInfo.dataURI || '',
-            // TODO these probably shouldn't be hardcoded...?
-            width: 24,
-            height: 24,
+            width: argInfo.width || 24,
+            height: argInfo.height || 24,
             alt: argInfo.altText || '*',
             // Whether or not the inline image should be flipped horizontally
             // in RTL languages. Defaults to false, indicating that the
@@ -4198,31 +4196,31 @@ class Runtime extends EventEmitter {
         this.requestRedraw();
     }
 
-    equals (a, b) {
-        const isCustomType = v => {
-            let prototype = Object.getPrototypeOf(v)
-            return prototype !== Object.prototype && prototype !== null && v.customId
-        };
-        const isNotActuallyZero = val => {
-            if (typeof val !== 'string') return false;
-            for (let i = 0; i < val.length; i++) {
-                const code = val.charCodeAt(i);
-                if (code === 48 || code === 9) {
-                    return false;
-                }
-            }
-            return true;
-        };
+    isCustomType (value) {
+        const prototype = Object.getPrototypeOf(value);
+        return prototype !== Object.prototype && prototype !== null;
+    }
 
+    isNotActuallyZero (value) {
+        if (typeof value !== 'string') return false;
+        for (let i = 0; i < value.length; i++) {
+            const code = value.charCodeAt(i);
+            if (code === 48 || code === 9) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    equals (a, b) {
         if (a === b) return true;
-        if (a === null && b === null) return true;
         if (typeof a === 'number' && !isNaN(a) && typeof b === 'number' && !isNaN(b)) return a === b;
 
         if (this.compilerOptions.strictEquality) {
             if (a === null || b === null) return false;
             
-            let aC = isCustomType(a);
-            let bC = isCustomType(b);
+            let aC = this.isCustomType(a);
+            let bC = this.isCustomType(b);
             if (aC !== bC) return false;
             if (aC) { // if aC is true then bC is also true
                 if (a.customId !== b.customId) return false;
@@ -4236,14 +4234,14 @@ class Runtime extends EventEmitter {
             if (b === null && a === "") return true;
             if (a === null || b === null) return false;
 
-            if (isCustomType(a) && isCustomType(b) && a.customId === b.customId) {
+            if (this.isCustomType(a) && this.isCustomType(b) && a.customId === b.customId) {
                 if (a[pmSymbol.equals] && a[pmSymbol.equals](b)) return true;
             }
 
             const n1 = +a;
-            if (Number.isNaN(n1) || (n1 === 0 && isNotActuallyZero(a))) return ('' + a).toLowerCase() === ('' + b).toLowerCase();
+            if (Number.isNaN(n1) || (n1 === 0 && this.isNotActuallyZero(a))) return ('' + a).toLowerCase() === ('' + b).toLowerCase();
             const n2 = +b;
-            if (Number.isNaN(n2) || (n2 === 0 && isNotActuallyZero(b))) return ('' + a).toLowerCase() === ('' + b).toLowerCase();
+            if (Number.isNaN(n2) || (n2 === 0 && this.isNotActuallyZero(b))) return ('' + a).toLowerCase() === ('' + b).toLowerCase();
             return n1 === n2;
         }
     }
